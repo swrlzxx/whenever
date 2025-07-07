@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>whenever - Kinetic Animation (High-Performance)</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #111;
+            height: 100%;
+            width: 100%;
+        }
+
+        #animation-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+            background-size: 400% 400%;
+            animation: gradient-flow 15s ease infinite;
+        }
+
+        @keyframes gradient-flow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 2;
+            display: block; /* Removes default margin */
+        }
+
+        #play-button {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+            padding: 1rem 2rem;
+            cursor: pointer;
+            border-radius: 10px;
+            border: 2px solid white;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            z-index: 100;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-weight: bold;
+        }
+        #play-button.hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="animation-bg"></div>
+    <canvas id="animation-canvas"></canvas>
+    
+    <audio id="song" src="whenever.mp3" preload="auto"></audio>
+    <button id="play-button">Play</button>
+
+    <script>
+        const playButton = document.getElementById('play-button');
+        const audio = document.getElementById('song');
+        const canvas = document.getElementById('animation-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- TIMELINE DATA ---
+        // Each object defines a lyrical element's animation
+        const timeline = [
+            // Chorus 1
+            { type: 'text', text: "somethin's really tellin' me", start: 1800, end: 3200 },
+            { type: 'text', text: "that you are the only", start: 3200, end: 5000 },
+            { type: 'text', text: "wake up just to fantasize", start: 5000, end: 6100 },
+            { type: 'rotatingText', text: 'i see', subtext: 'forever', start: 6100, end: 8000 },
+            { type: 'eye', text: 'in your eyes', start: 7000, end: 8000 },
+            { type: 'text', text: "see the way you look at me", start: 8100, end: 9200 },
+            { type: 'text', text: "baby boy, honestly", start: 9300, end: 11000 },
+            { type: 'bubble', text: "we could be so cute together", align: 'left', start: 11100, end: 12500 },
+            { type: 'text', text: "i'm ready, just tell me whenever", start: 12600, end: 14500 },
+            
+            // Verse
+            { type: 'text', text: "feels just like a dream with you", start: 14600, end: 16800 },
+            { type: 'text', text: "so what are you tryna do?", start: 17500, end: 19500 },
+            { type: 'text', text: "i'm just playin' shy for you", start: 20400, end: 22400 },
+            { type: 'text', text: "so maybe this could work out", start: 23000, end: 25000 },
+            { type: 'text', text: "'cause i've been stuck in my own head", start: 25500, end: 27800 },
+            { type: 'text', text: "nonetheless, i'm not the type to forget", start: 28200, end: 30800 },
+            { type: 'text', text: "what happens when i fall in love?", start: 31500, end: 33800 },
+            { type: 'text', text: "but this time might be different, though", start: 34200, end: 36000 },
+
+            // All other parts of the song can be added here following the same format
+        ];
+
+        // --- CANVAS & ANIMATION SETUP ---
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        let startTimestamp = null;
+
+        function playAnimation() {
+            playButton.classList.add('hidden');
+            audio.play().catch(e => console.error("Audio playback failed:", e));
+            requestAnimationFrame(animate);
+        }
+
+        function animate(currentTime) {
+            if (!startTimestamp) startTimestamp = currentTime;
+            const elapsedTime = currentTime - startTimestamp;
+
+            // Clear the canvas for the new frame
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Set default text styles for this frame
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = `bold ${canvas.width * 0.055}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+
+            // Draw all active timeline items
+            timeline.forEach(item => {
+                if (elapsedTime >= item.start && elapsedTime <= item.end) {
+                    // Calculate opacity and scale for smooth fade-in/out
+                    const duration = item.end - item.start;
+                    const itemProgress = (elapsedTime - item.start) / duration;
+                    
+                    let opacity = 1.0;
+                    const fadeDuration = 0.2; // 20% of the time is for fading
+                    if (itemProgress < fadeDuration) {
+                        opacity = itemProgress / fadeDuration;
+                    } else if (itemProgress > (1 - fadeDuration)) {
+                        opacity = (1 - itemProgress) / fadeDuration;
+                    }
+                    
+                    const scale = 0.8 + (opacity * 0.2); // Scale from 0.8 to 1.0
+
+                    // Use a switch to call the correct drawing function
+                    switch (item.type) {
+                        case 'text':
+                            drawSimpleText(item, opacity, scale);
+                            break;
+                        case 'rotatingText':
+                            drawRotatingText(item, opacity, scale, elapsedTime);
+                            break;
+                        case 'eye':
+                             drawEye(item, opacity, scale);
+                            break;
+                        case 'bubble':
+                            drawBubble(item, opacity, scale);
+                            break;
+                    }
+                }
+            });
+
+            if (elapsedTime < audio.duration * 1000) {
+                requestAnimationFrame(animate);
+            }
+        }
+        
+        // --- DRAWING FUNCTIONS ---
+
+        function drawSimpleText(item, opacity, scale) {
+            ctx.save();
+            ctx.globalAlpha = opacity;
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(scale, scale);
+            ctx.fillText(item.text, 0, 0);
+            ctx.restore();
+        }
+
+        function drawRotatingText(item, opacity, scale, elapsedTime) {
+            ctx.save();
+            ctx.globalAlpha = opacity;
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(scale, scale);
+
+            // Draw center text
+            ctx.fillText(item.text, 0, 0);
+            
+            // Draw rotating subtext
+            const rotation = (elapsedTime / 2000) * Math.PI * 2; // Full rotation every 2 seconds
+            const radius = canvas.width * 0.15;
+            ctx.font = `bold ${canvas.width * 0.05}px -apple-system, sans-serif`;
+
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2 + rotation;
+                ctx.save();
+                ctx.rotate(angle);
+                ctx.translate(0, -radius);
+                ctx.rotate(-angle); // Keep text upright
+                ctx.fillText(item.subtext, 0, 0);
+                ctx.restore();
+            }
+            
+            ctx.restore();
+        }
+
+        function drawEye(item, opacity, scale) {
+            ctx.save();
+            ctx.globalAlpha = opacity;
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(scale, scale);
+            
+            const eyeWidth = canvas.width * 0.35;
+            const eyeHeight = canvas.height * 0.25;
+
+            // Draw the eye shape
+            ctx.fillStyle = '#3d1b3e';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, eyeWidth / 2, eyeHeight / 2, 0, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Draw the text inside
+            ctx.fillStyle = 'white';
+            ctx.font = `bold ${canvas.width * 0.05}px -apple-system, sans-serif`;
+            ctx.fillText(item.text, 0, 0);
+
+            ctx.restore();
+        }
+
+        function drawBubble(item, opacity, scale) {
+            ctx.save();
+            ctx.globalAlpha = opacity;
+
+            // Positioning
+            const bubbleWidth = canvas.width * 0.6;
+            const bubbleHeight = canvas.height * 0.15;
+            const x = (canvas.width - bubbleWidth) / 2;
+            const y = (canvas.height - bubbleHeight) / 2;
+            
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+
+            // Set bubble style
+            ctx.fillStyle = item.align === 'left' ? '#f1f1f1' : '#007aff';
+            const radius = bubbleHeight / 2;
+
+            // Draw rounded rectangle
+            ctx.beginPath();
+            ctx.moveTo(radius, 0);
+            ctx.lineTo(bubbleWidth - radius, 0);
+            ctx.arcTo(bubbleWidth, 0, bubbleWidth, radius, radius);
+            ctx.lineTo(bubbleWidth, bubbleHeight - radius);
+            ctx.arcTo(bubbleWidth, bubbleHeight, bubbleWidth - radius, bubbleHeight, radius);
+            ctx.lineTo(radius, bubbleHeight);
+            ctx.arcTo(0, bubbleHeight, 0, bubbleHeight - radius, radius);
+            ctx.lineTo(0, radius);
+            ctx.arcTo(0, 0, radius, 0, radius);
+            ctx.closePath();
+            ctx.fill();
+
+            // Draw text inside
+            ctx.fillStyle = item.align === 'left' ? 'black' : 'white';
+            ctx.font = `bold ${canvas.width * 0.04}px -apple-system, sans-serif`;
+            ctx.fillText(item.text, bubbleWidth / 2, bubbleHeight / 2);
+
+            ctx.restore();
+        }
+
+        playButton.addEventListener('click', playAnimation);
+    </script>
+</body>
+</html>
